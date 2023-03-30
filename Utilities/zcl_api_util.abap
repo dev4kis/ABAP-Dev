@@ -13,7 +13,14 @@ public section.
            END OF ty_dyn_struct_props .
   types:
     ty_dyn_struct_props_tt TYPE STANDARD TABLE OF ty_dyn_struct_props WITH KEY field_name .
-
+ class-methods VALIDATE_MAIL
+    importing
+      !IV_MAIL type STRING
+    returning
+      value(RV_SUCCESS) type CRMT_BOOLEAN .
+       class-methods GENERATE_NEW_PASSWORD
+    returning
+      value(RV_PASSWORD) type STRING .
   class-methods EXTRACT_BPATH_FILTER
     importing
       !I_FILTER type STRING
@@ -351,4 +358,74 @@ CLASS ZCL_API_UTIL IMPLEMENTATION.
         CLEAR rv_xstring.
     ENDTRY.
   ENDMETHOD.
+   METHOD validate_mail.
+
+    DATA: ls_adr TYPE sx_address.
+    ls_adr-type  = 'INT'.
+    ls_adr-address = iv_mail.
+
+    CALL FUNCTION 'SX_INTERNET_ADDRESS_TO_NORMAL'
+      EXPORTING
+        address_unstruct    = ls_adr
+      EXCEPTIONS
+        error_address_type  = 1
+        error_address       = 2
+        error_group_address = 3
+        OTHERS              = 4.
+    IF sy-subrc <> 0.
+      RETURN.
+* Implement suitable error handling here
+    ENDIF.
+
+    rv_success = abap_true.
+
+    TRY.
+        DATA(obj_regex) = NEW cl_abap_regex( pattern = '[a-zA-Z0-9._%-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}'
+                                             ignore_case = abap_true ).
+
+        DATA(obj_matcher) = obj_regex->create_matcher( text  = iv_mail ).
+*                            CATCH cx_sy_matcher. " System Exceptions for Regular Expressions
+        IF obj_matcher->match(  ) IS INITIAL.
+
+          rv_success = abap_false.
+        ENDIF.
+      CATCH cx_sy_matcher.
+        rv_success = abap_false.
+    ENDTRY.
+
+  ENDMETHOD.
+  METHOD generate_new_password.
+
+**********************************************************************
+* Static password will be set out of Program ZBF_CUA_CREATE_TEST_USERS
+**********************************************************************
+
+    IF zcl_cua_bxt_tools=>gv_password_from_test_prog IS NOT INITIAL.
+      rv_password = zcl_cua_bxt_tools=>gv_password_from_test_prog.
+      RETURN.
+    ENDIF.
+
+    DATA: d_pass(8).
+    CALL FUNCTION 'RSEC_GENERATE_PASSWORD'
+      EXPORTING
+*       ALPHABET        =
+*       ALPHABET_LENGTH = 0
+*       FORCE_INIT      = ' '
+*       OUTPUT_LENGTH   = 10
+*       DOWNWARDS_COMPATIBLE = SPACE
+        security_policy = 'ZCUA_PASSWORD_GENERATION'
+      IMPORTING
+        output          = d_pass    " Password
+*     EXCEPTIONS
+*       SOME_ERROR      = 1
+*       OTHERS          = 2
+      .
+    IF sy-subrc <> 0.
+*    MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*               WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+    ENDIF.
+
+    rv_password = d_pass.
+  ENDMETHOD.
+
 ENDCLASS.
